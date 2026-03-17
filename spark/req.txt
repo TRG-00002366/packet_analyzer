@@ -1,9 +1,0 @@
-stream_consumer.py
-    Read in data topic streams from kafka.
-    Parse JSON
-    Write data to data/raw as a parquet
-
-etl.py
-    Read parquets from data/raw
-    Perform transformations/aggregations
-    save results to sta/transformed

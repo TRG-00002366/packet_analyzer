@@ -1,17 +1,18 @@
-# Project 1: Real-Time E-Commerce Order Analytics Pipeline
+# Project 1: Real-Time Netowrk Trafffic Analytics Pipeline
+Contributors: Ryan Lee Zimmerman, Juan Jose Villela Martinez
 
 ## Overview
 
-Build an end-to-end data engineering pipeline that ingests real-time e-commerce order events via Kafka, processes them with PySpark, and orchestrates the entire workflow using Apache Airflow. This project ties together all concepts from **Weeks 1–4** of the Data Engineering curriculum.
+Build an end-to-end data engineering pipeline that ingests real-time network events via Kafka, processes them with PySpark, and orchestrates the entire workflow using Apache Airflow. This project ties together all concepts from **Weeks 1–4** of the Data Engineering curriculum.
 
 ---
 
 ## Business Scenario
 
-An e-commerce company wants to:
+A packet analyzer for a company needs to:
 
-1. **Stream** order events (new orders, cancellations, returns) in real time.
-2. **Process** the raw events to compute hourly sales aggregations, top-selling products, and regional revenue breakdowns.
+1. **Stream** network events (incoming/outgoing TCP/IP packets) in real time.
+2. **Process** packets to determine network status an potential security threats
 3. **Persist** both raw and transformed data to storage (local filesystem or S3).
 4. **Orchestrate** the batch and streaming jobs on a daily schedule with retry and alerting.
 
@@ -21,11 +22,11 @@ An e-commerce company wants to:
 
 ```
 ┌──────────────┐       ┌─────────────┐       ┌─────────────────────┐
-│  Order Event │       │             │       │  PySpark Streaming   │
-│  Simulator   │──────▶│   Kafka     │──────▶│  Consumer / ETL      │
-│  (Producer)  │       │  (Topic:    │       │  (Spark Structured   │
-│              │       │  orders)    │       │   Streaming)          │
-└──────────────┘       └─────────────┘       └──────────┬────────────┘
+│  Order Event │       │             │       │  PySpark Streaming  │
+│  Simulator   │─────▶│   Kafka     │──────▶│  Consumer / ETL     │
+│  (Producer)  │       │  (Topic:    │       │  (Spark Structured  │
+│              │       │  packet)    │       │   Streaming)        │
+└──────────────┘       └─────────────┘       └──────────┬──────────┘
                                                         │
                                                         ▼
                                               ┌─────────────────────┐
@@ -71,25 +72,32 @@ An e-commerce company wants to:
 
 ### Module 1 — Kafka Producer (Week 3)
 
-**Goal:** Simulate a stream of order events.
+**Goal:** Simulate a stream of network events.
 
-- Create a Kafka topic named `ecommerce_orders`.
-- Write a Python Kafka producer (`producer.py`) that generates JSON order events:
+- Create a Kafka topic named `packets`.
+- Write a Python Kafka producer (`producer.py`) that generates JSON network events as IP/TCP/UDP packets:
   ```json
   {
-    "order_id": "ORD-10042",
-    "customer_id": "CUST-301",
-    "product_id": "PROD-88",
-    "product_name": "Wireless Mouse",
-    "category": "Electronics",
-    "quantity": 2,
-    "unit_price": 29.99,
-    "order_status": "NEW",
-    "region": "US-East",
-    "timestamp": "2026-02-19T10:32:00Z"
+    //IP
+    "packet_id": "10042",                   //Arbitrariy ID for packet in our database, BigSerial
+    "version": 4,                           //Ipv4 or Ipv6
+    "ip_header_length": 16,                 //Length of header
+    "data_length": 128,                     //Length of data
+    "protocol": "TCP",                      //Transport protocol being used
+    "checksum": 142,                        //Checks for errors in the header
+    "src_ip": "0.0.0.0",                    //IP that sends the packet
+    "dst_ip": "192.168.1.1",                //IP that receives the packet
+    //TCP/UDP
+    "src_port": 2,                          //Port that sent the data
+    "dest_port": 2,                         //port that will receive data
+    "control_flags": "SYN",                 //Control connection setup
+    "window_size": 0,                       //Ammount of data receiver can excpet for flow control
+    "data": "",                             //Raw application layer data
+    //extra
+    "timestamp": 1772396747                 //Unix timestamp
+
   }
   ```
-- Use `order_status` values: `NEW`, `CANCELLED`, `RETURNED`.
 - Produce at least **500 events** with randomized data using the `Faker` library.
 
 ---
@@ -99,7 +107,7 @@ An e-commerce company wants to:
 **Goal:** Consume and persist the raw Kafka stream.
 
 - Write a PySpark Structured Streaming job (`stream_consumer.py`).
-- Read from the `ecommerce_orders` Kafka topic.
+- Read from the `packets` Kafka topic.
 - Deserialize JSON messages into a Spark DataFrame.
 - Write the raw data to a **Parquet** sink partitioned by `date` (derived from `timestamp`).
 - Implement a 1-minute micro-batch trigger.
@@ -114,18 +122,20 @@ An e-commerce company wants to:
 
 - Load the raw Parquet data as an RDD.
 - Use RDD transformations (`map`, `filter`, `reduceByKey`) to:
-  - Filter out `CANCELLED` orders.
-  - Compute total revenue per `product_id` using key-value pair RDDs.
+  - Filter out `localhost` packets.
+  - Filter out corrupted packets (checksum mismatch).
+  - Filter packets that are from or are going to an ip on blacklist.txt
+  - Compute total packets per `dst_ip` using key-value pair RDDs.
 - Save the result as a text file.
 
 #### 3B — DataFrame / Spark SQL Processing (Week 2)
 
 - Load the raw Parquet data into a Spark DataFrame.
 - Perform the following transformations:
-  1. **Hourly Sales Summary** — Group by hour, compute `total_orders`, `total_revenue`, `avg_order_value`.
-  2. **Top 10 Products** — Rank products by total quantity sold using Spark SQL window functions.
-  3. **Regional Revenue** — Join orders with a static `regions.csv` reference dataset to enrich region names, then aggregate revenue by region.
-  4. **Order Status Breakdown** — Pivot on `order_status` to get counts per category.
+  1. **Hourly packet summary** — Group by hour, compute `total_src_ip_packets`, `total_dst_ip_packets`, `avg_sent_packets`.
+  2. **Top 10 DST_IP** — Rank packets by total quantity sent using Spark SQL window functions.
+  3. **Department Traffic** — Join packets with a static `departments.csv` reference dataset to aggregate packets by dst_ip/src_ip
+  4. **SYN Flood Detection** — Check for unusually high network traffic containing a SYN flag.
 - Write each output to Parquet, partitioned and bucketed where appropriate.
 - Use **caching** on the base DataFrame to speed up multiple downstream transformations.
 
