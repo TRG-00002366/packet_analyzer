@@ -45,19 +45,6 @@ class PacketProducer:
         
         return future
     
-    def send_orders_batch(self, packets):
-        """Send multiple orders and return any failures."""
-        failures = []
-        
-        for packet in packets:
-            future = self.send_packet(packet)
-            try:
-                future.get(timeout=10)
-            except KafkaError as e:
-                failures.append({'packet': packet, 'error': str(e)})
-        
-        return failures
-    
     def _on_success(self, metadata):
         logger.info(
             f"Message sent: topic={metadata.topic}, "
@@ -84,6 +71,11 @@ def generate_packet(packet_id, faker_instance, blacklist=None):
         use_blacklist = blacklist and random.random() < 0.05  # 5% chance
         if use_blacklist:
             return random.choice(blacklist)
+        
+        use_frequent = random.random() < .1192
+        if use_frequent:
+            return random.choice(["186.2.48.5", "192.80.254.3", "211.180.93.32", "2.178.206.105", "166.175.88.24", "127.0.0.1"])
+
         return faker_instance.ipv4_public() if ip_version == 4 else faker_instance.ipv6()
 
     src_ip = pick_ip(version)
@@ -102,6 +94,10 @@ def generate_packet(packet_id, faker_instance, blacklist=None):
     header_str = json.dumps(header_fields, sort_keys=True)
     # Calculate checksum
     checksum = ones_complement_checksum(header_str)
+    invalid_checksum = random.random() < .05
+    if invalid_checksum:
+        checksum = 5 
+        
     # Now include checksum in header for length
     header_fields_with_checksum = dict(header_fields)
     header_fields_with_checksum["checksum"] = checksum
@@ -149,7 +145,7 @@ def produce_packets(bootstrap_servers = 'kafka:9092', blacklist_path = 'data/bla
 
 
     faker_instance = Faker()
-    produce = 500
+    produce = 1000
     packet_id_start = 10000
     for i in range(produce):
         packet = generate_packet(packet_id_start + i, faker_instance, blacklist)

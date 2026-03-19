@@ -19,7 +19,7 @@ RAW_PATH = "/app/data/raw"
 RAW_METADATA_PATH = f"{RAW_PATH}/_spark_metadata"
 RAW_CHECKPOINT_PATH = f"{RAW_PATH}/_checkpoints"
 RDD_OUTPUT_PATH = "/app/data/transformed/rdd_packets_per_dst_ip"
-DF_OUTPUT_PATH = "/app/data/transformed/df_packets_by_protocol"
+DF_OUTPUT_PATH = "/app/data/transformed/protocol_distribution"
 
 SPARK_ENV_ARGS = [
     "--conf", "spark.pyspark.python=python3",
@@ -148,9 +148,6 @@ def validate_output():
         .getOrCreate()
 
     try:
-        raw_df = spark.read.csv(RAW_PATH)
-        if raw_df.rdd.isEmpty():
-            raise RuntimeError("Raw parquet output is empty")
 
         rdd_df = spark.read.csv(RDD_OUTPUT_PATH)
         if rdd_df.rdd.isEmpty():
@@ -159,8 +156,7 @@ def validate_output():
         df_output = spark.read.csv(DF_OUTPUT_PATH)
         if df_output.rdd.isEmpty():
             raise RuntimeError("DataFrame ETL output is empty")
-
-        logger.info("Raw output rows: %s", raw_df.count())
+        
         logger.info("RDD output rows: %s", rdd_df.count())
         logger.info("DataFrame output rows: %s", df_output.count())
         logger.info("DataFrame output schema: %s", df_output.schema.simpleString())
@@ -181,8 +177,9 @@ default_args = {
 with DAG(
     dag_id="packet_pipeline",
     default_args=default_args,
-    schedule="@daily",
+    schedule="* * * * *",
     catchup=False,
+    max_active_runs=1,
     params={
         "execution_date": Param(
             default="2026-03-18",

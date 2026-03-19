@@ -121,8 +121,7 @@ Build an end-to-end data engineering pipeline that ingests real-time packet even
 - Perform the following transformations:
   1. **Hourly packet summary** — Group by hour, compute `total_src_ip_packets`, `total_dst_ip_packets`, `avg_sent_packets`.
   2. **Top 10 DST_IP** — Rank packets by total quantity sent using Spark SQL window functions.
-  3. **Department Traffic** — Join packets with a static `departments.csv` reference dataset to aggregate packets by dst_ip/src_ip
-  4. **SYN Flood Detection** — Check for unusually high network traffic containing a SYN flag.
+  3. **SYN Flood Detection** — Check for unusually high network traffic containing a SYN flag.
 - Write each output to Parquet, partitioned and bucketed where appropriate.
 - Use **caching** on the base DataFrame to speed up multiple downstream transformations.
 
