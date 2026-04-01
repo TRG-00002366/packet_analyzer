@@ -145,7 +145,7 @@ def produce_packets(bootstrap_servers = 'kafka:9092', blacklist_path = 'data/bla
 
 
     faker_instance = Faker()
-    produce = 1000
+    produce = 100
     packet_id_start = 10000
     for i in range(produce):
         packet = generate_packet(packet_id_start + i, faker_instance, blacklist)

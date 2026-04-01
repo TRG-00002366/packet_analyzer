@@ -1,11 +1,15 @@
 import json
+import os
 
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, from_unixtime, to_date
 from utils.utils import ones_complement_checksum
+from utils.snowflake import build_snowflake_options
 
 
 RAW_PATH = "/app/data/raw/"
 OUTPUT_PATH = "/app/data/transformed/rdd_packets_per_dst_ip"
+SNOWFLAKE_STAGE_TABLE = os.getenv("SNOWFLAKE_STAGING_TABLE", "STG_PACKET_EVENTS")
 
 
 def expected_checksum(packet_row):
@@ -20,6 +24,33 @@ def expected_checksum(packet_row):
     header_str = json.dumps(header_fields, sort_keys=True)
     return ones_complement_checksum(header_str)
 
+
+def write_safe_packets_to_snowflake(packet_df):
+    snowflake_options = build_snowflake_options(SNOWFLAKE_STAGE_TABLE)
+
+    packet_df.select(
+        col("packet_id").alias("PACKET_ID"),
+        col("version").alias("VERSION"),
+        col("ip_header_length").alias("IP_HEADER_LENGTH"),
+        col("data_length").alias("DATA_LENGTH"),
+        col("protocol").alias("PROTOCOL"),
+        col("checksum").alias("CHECKSUM"),
+        col("src_ip").alias("SRC_IP"),
+        col("dst_ip").alias("DST_IP"),
+        col("src_port").alias("SRC_PORT"),
+        col("dest_port").alias("DEST_PORT"),
+        col("control_flags").alias("CONTROL_FLAGS"),
+        col("window_size").alias("WINDOW_SIZE"),
+        col("data").alias("DATA"),
+        col("timestamp").alias("EVENT_EPOCH"),
+        col("event_date").alias("EVENT_DATE"),
+        col("event_time").alias("EVENT_TIME"),
+    ).write \
+        .format("net.snowflake.spark.snowflake") \
+        .options(**snowflake_options) \
+        .mode("append") \
+        .save()
+
 spark = SparkSession.builder \
     .appName("PacketBatchRDD") \
     .getOrCreate()
@@ -28,6 +59,12 @@ sc = spark.sparkContext
 
 # Read raw parquet
 df = spark.read.parquet(RAW_PATH)
+if "event_time" not in df.columns:
+    df = df.withColumn("event_time", from_unixtime(col("timestamp")).cast("timestamp"))
+if "event_date" not in df.columns:
+    df = df.withColumn("event_date", to_date(col("event_time")))
+
+packet_schema = df.schema
 rdd = df.rdd
 total_packets = rdd.count()
 
@@ -69,8 +106,11 @@ packets_per_dst_ip = safe_packets_rdd \
     .sortBy(lambda x: x[1], ascending=False)
 
 
-df = packets_per_dst_ip.toDF(["dst_ip", "total"])
-df.show(5)
-df.write.mode("overwrite").csv(OUTPUT_PATH, header=True)
+summary_df = packets_per_dst_ip.toDF(["dst_ip", "total"])
+summary_df.show(5)
+summary_df.write.mode("overwrite").csv(OUTPUT_PATH, header=True)
+
+safe_packets_df = spark.createDataFrame(safe_packets_rdd, schema=packet_schema)
+write_safe_packets_to_snowflake(safe_packets_df)
 
 spark.stop()

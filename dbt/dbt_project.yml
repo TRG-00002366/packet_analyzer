@@ -1,0 +1,31 @@
+name: packet_analyzer
+version: 1.0.0
+config-version: 2
+
+profile: packet_analyzer
+
+model-paths:
+  - models
+seed-paths:
+  - seeds
+macro-paths:
+  - macros
+snapshot-paths:
+  - snapshots
+test-paths:
+  - tests
+analysis-paths:
+  - analyses
+
+clean-targets:
+  - target
+  - dbt_packages
+
+models:
+  packet_analyzer:
+    +materialized: view
+    intermediate:
+      +schema: intermediate
+    marts:
+      +schema: gold
+      +materialized: table

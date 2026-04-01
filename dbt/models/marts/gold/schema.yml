@@ -1,0 +1,83 @@
+version: 2
+
+models:
+  - name: gold_hourly_packet_summary
+    description: GOLD mart for hourly packet volume and cardinality metrics.
+    columns:
+      - name: hour
+        tests:
+          - unique
+          - not_null
+
+  - name: gold_syn_flood_detection
+    description: GOLD mart highlighting 1-minute windows with elevated SYN packet counts.
+    columns:
+      - name: minute_window_start
+        tests:
+          - not_null
+      - name: dst_ip
+        tests:
+          - not_null
+
+  - name: gold_protocol_distribution
+    description: GOLD mart summarizing protocol usage and average payload size.
+    columns:
+      - name: protocol
+        tests:
+          - not_null
+
+  - name: gold_port_scan_detection
+    description: GOLD mart identifying potential port scans by source IP over 1-minute windows.
+    columns:
+      - name: minute_window_start
+        tests:
+          - not_null
+      - name: src_ip
+        tests:
+          - not_null
+      - name: severity
+        tests:
+          - not_null
+
+  - name: gold_talker_summary
+    description: GOLD mart ranking source and destination IPs by hourly traffic volume.
+    columns:
+      - name: hour_start
+        tests:
+          - not_null
+      - name: talker_role
+        tests:
+          - not_null
+      - name: ip_address
+        tests:
+          - not_null
+
+  - name: gold_dst_ip_exposure
+    description: GOLD mart summarizing hourly exposure by destination IP, port, and protocol.
+    columns:
+      - name: hour_start
+        tests:
+          - not_null
+      - name: dst_ip
+        tests:
+          - not_null
+      - name: exposure_severity
+        tests:
+          - not_null
+
+  - name: gold_security_incident_feed
+    description: GOLD incident feed combining alert-ready SYN flood and port scan detections.
+    columns:
+      - name: incident_id
+        tests:
+          - unique
+          - not_null
+      - name: incident_type
+        tests:
+          - not_null
+      - name: severity
+        tests:
+          - not_null
+      - name: detected_at
+        tests:
+          - not_null

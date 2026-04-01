@@ -13,6 +13,18 @@ from airflow.sensors.filesystem import FileSensor
 SPARK_SUBMIT = "/home/airflow/.local/bin/spark-submit"
 SPARK_MASTER = "spark://spark-master:7077"
 SPARK_KAFKA_PACKAGE = "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0"
+SPARK_SNOWFLAKE_CONNECTOR_PACKAGE = os.getenv(
+    "SPARK_SNOWFLAKE_CONNECTOR_PACKAGE",
+    "net.snowflake:spark-snowflake_2.12:3.1.1",
+)
+SNOWFLAKE_JDBC_PACKAGE = os.getenv(
+    "SNOWFLAKE_JDBC_PACKAGE",
+    "net.snowflake:snowflake-jdbc:3.15.1",
+)
+SPARK_SNOWFLAKE_PACKAGES = ",".join([
+    SPARK_SNOWFLAKE_CONNECTOR_PACKAGE,
+    SNOWFLAKE_JDBC_PACKAGE,
+])
 KAFKA_BOOTSTRAP = "kafka:9092"
 PACKET_TOPIC = "packets"
 RAW_PATH = "/app/data/raw"
@@ -132,7 +144,10 @@ def run_streaming_job():
 
 
 def run_rdd_etl():
-    run_spark_job("/app/spark/batch_rdd_etl.py")
+    run_spark_job(
+        "/app/spark/batch_rdd_etl.py",
+        packages=SPARK_SNOWFLAKE_PACKAGES,
+    )
 
 
 def run_df_etl():

@@ -1,0 +1,43 @@
+version: 2
+
+sources:
+  - name: silver
+    database: "{{ env_var('SNOWFLAKE_DATABASE', 'PACKET') }}"
+    schema: SILVER
+    tables:
+      - name: FACT_PACKET_EVENTS
+        description: Packet event fact table loaded from the staging stream.
+        columns:
+          - name: PACKET_EVENT_KEY
+            tests:
+              - unique
+              - not_null
+          - name: TIME_KEY
+            tests:
+              - not_null
+          - name: PACKET_ID
+            tests:
+              - not_null
+          - name: EVENT_TIME
+            tests:
+              - not_null
+      - name: DIM_TIME
+        description: Time dimension for packet event timestamps.
+        columns:
+          - name: TIME_KEY
+            tests:
+              - unique
+              - not_null
+          - name: EVENT_TIME
+            tests:
+              - unique
+              - not_null
+
+models:
+  - name: int_packet_events
+    description: Event-level SILVER model joining packet facts to the time dimension.
+    columns:
+      - name: packet_event_key
+        tests:
+          - unique
+          - not_null

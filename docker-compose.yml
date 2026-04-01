@@ -149,6 +149,17 @@ services:
       - AIRFLOW__WEBSERVER__AUTH_BACKEND=airflow.www.security.DefaultAuthBackend
       - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/tmp/airflow_logs
       - AIRFLOW__CORE__XCOM_BACKEND=airflow.models.xcom.BaseXCom
+      - SNOWFLAKE_ACCOUNT=${SNOWFLAKE_ACCOUNT:-}
+      - SNOWFLAKE_URL=${SNOWFLAKE_URL:-}
+      - SNOWFLAKE_USER=${SNOWFLAKE_USER:-}
+      - SNOWFLAKE_PASSWORD=${SNOWFLAKE_PASSWORD:-}
+      - SNOWFLAKE_WAREHOUSE=${SNOWFLAKE_WAREHOUSE:-}
+      - SNOWFLAKE_DATABASE=${SNOWFLAKE_DATABASE:-PACKET}
+      - SNOWFLAKE_SCHEMA=${SNOWFLAKE_SCHEMA:-SILVER}
+      - SNOWFLAKE_ROLE=${SNOWFLAKE_ROLE:-}
+      - SNOWFLAKE_STAGING_TABLE=${SNOWFLAKE_STAGING_TABLE:-STG_PACKET_EVENTS}
+      - SPARK_SNOWFLAKE_CONNECTOR_PACKAGE=${SPARK_SNOWFLAKE_CONNECTOR_PACKAGE:-net.snowflake:spark-snowflake_2.12:3.1.1}
+      - SNOWFLAKE_JDBC_PACKAGE=${SNOWFLAKE_JDBC_PACKAGE:-net.snowflake:snowflake-jdbc:3.15.1}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./airflow:/app/airflow
