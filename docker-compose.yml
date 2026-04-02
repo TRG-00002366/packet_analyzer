@@ -12,7 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - spark-net
-      
+
   producer:
     build:
       context: .
@@ -126,6 +126,28 @@ services:
     command: >
       bash -c "/opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077"
 
+  dbt:
+    build:
+      context: .
+      dockerfile: Dockerfile.dbt
+    image: my-dbt:latest
+    container_name: dbt
+    environment:
+      - SNOWFLAKE_ACCOUNT=${SNOWFLAKE_ACCOUNT:-}
+      - SNOWFLAKE_URL=${SNOWFLAKE_URL:-}
+      - SNOWFLAKE_USER=${SNOWFLAKE_USER:-}
+      - SNOWFLAKE_PASSWORD=${SNOWFLAKE_PASSWORD:-}
+      - SNOWFLAKE_WAREHOUSE=${SNOWFLAKE_WAREHOUSE:-}
+      - SNOWFLAKE_DATABASE=${SNOWFLAKE_DATABASE:-PACKET}
+      - SNOWFLAKE_SCHEMA=${SNOWFLAKE_SCHEMA:-SILVER}
+      - SNOWFLAKE_ROLE=${SNOWFLAKE_ROLE:-}
+      - DBT_PROFILES_DIR=/app/dbt
+    volumes:
+      - ./dbt:/app/dbt
+    command: ["run", "--project-dir", "/app/dbt", "--profiles-dir", "/app/dbt"]
+    networks:
+      - spark-net
+
   airflow:
     user: "50000:0"
     build:
@@ -160,10 +182,13 @@ services:
       - SNOWFLAKE_STAGING_TABLE=${SNOWFLAKE_STAGING_TABLE:-STG_PACKET_EVENTS}
       - SPARK_SNOWFLAKE_CONNECTOR_PACKAGE=${SPARK_SNOWFLAKE_CONNECTOR_PACKAGE:-net.snowflake:spark-snowflake_2.12:3.1.1}
       - SNOWFLAKE_JDBC_PACKAGE=${SNOWFLAKE_JDBC_PACKAGE:-net.snowflake:snowflake-jdbc:3.15.1}
+      - DOCKER_NETWORK_NAME=${DOCKER_NETWORK_NAME:-spark-net}
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
       - postgres_data:/var/lib/postgresql/data
       - ./airflow:/app/airflow
       - ./spark:/app/spark
+      - ./dbt:/app/dbt
       - raw_data:/app/data/raw
       - transformed_data:/app/data/transformed
       - ./data/blacklist.txt:/app/data/blacklist.txt
@@ -178,6 +203,7 @@ services:
 
 networks:
   spark-net:
+    name: ${DOCKER_NETWORK_NAME:-spark-net}
     driver: bridge
 volumes:
   postgres_data:

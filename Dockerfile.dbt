@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system deps
+RUN apt-get update && apt-get install -y \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dbt
+RUN pip install --no-cache-dir dbt-snowflake==1.7.0
+
+# Copy dbt project
+COPY dbt/ ./dbt/
+
+WORKDIR /app/dbt
+
+# Install dbt packages (if any)
+RUN dbt deps
+
+ENTRYPOINT ["dbt"]
+CMD ["run"]

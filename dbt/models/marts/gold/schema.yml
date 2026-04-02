@@ -4,7 +4,7 @@ models:
   - name: gold_hourly_packet_summary
     description: GOLD mart for hourly packet volume and cardinality metrics.
     columns:
-      - name: hour
+      - name: hour_start
         tests:
           - unique
           - not_null

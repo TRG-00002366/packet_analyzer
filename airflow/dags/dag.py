@@ -8,6 +8,7 @@ from airflow.models.param import Param
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 from airflow.sensors.filesystem import FileSensor
+from airflow.providers.docker.operators.docker import DockerOperator
 
 
 SPARK_SUBMIT = "/home/airflow/.local/bin/spark-submit"
@@ -32,6 +33,9 @@ RAW_METADATA_PATH = f"{RAW_PATH}/_spark_metadata"
 RAW_CHECKPOINT_PATH = f"{RAW_PATH}/_checkpoints"
 RDD_OUTPUT_PATH = "/app/data/transformed/rdd_packets_per_dst_ip"
 DF_OUTPUT_PATH = "/app/data/transformed/protocol_distribution"
+DBT_PROJECT_DIR = "/app/dbt"
+DBT_PROFILES_DIR = "/app/dbt"
+DOCKER_NETWORK_NAME = os.getenv("DOCKER_NETWORK_NAME", "spark-net")
 
 SPARK_ENV_ARGS = [
     "--conf", "spark.pyspark.python=python3",
@@ -150,35 +154,6 @@ def run_rdd_etl():
     )
 
 
-def run_df_etl():
-    run_spark_job("/app/spark/batch_df_etl.py")
-
-
-def validate_output():
-    from pyspark.sql import SparkSession
-
-    spark = SparkSession.builder \
-        .master("local[1]") \
-        .appName("PacketOutputValidation") \
-        .getOrCreate()
-
-    try:
-
-        rdd_df = spark.read.csv(RDD_OUTPUT_PATH)
-        if rdd_df.rdd.isEmpty():
-            raise RuntimeError("RDD ETL output is empty")
-
-        df_output = spark.read.csv(DF_OUTPUT_PATH)
-        if df_output.rdd.isEmpty():
-            raise RuntimeError("DataFrame ETL output is empty")
-        
-        logger.info("RDD output rows: %s", rdd_df.count())
-        logger.info("DataFrame output rows: %s", df_output.count())
-        logger.info("DataFrame output schema: %s", df_output.schema.simpleString())
-    finally:
-        spark.stop()
-
-
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
@@ -227,16 +202,27 @@ with DAG(
         python_callable=run_rdd_etl,
     )
 
-    run_df_etl_task = PythonOperator(
-        task_id="run_df_etl",
-        python_callable=run_df_etl,
-    )
-
-    validate_output_task = PythonOperator(
-        task_id="validate_output",
-        python_callable=validate_output,
+    run_dbt_task = DockerOperator(
+        task_id="run_dbt_models",
+        image="my-dbt:latest",
+        command=f"run --project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR}",
+        docker_url="unix://var/run/docker.sock",
+        network_mode=DOCKER_NETWORK_NAME,
+        environment={
+            "SNOWFLAKE_ACCOUNT": os.getenv("SNOWFLAKE_ACCOUNT"),
+            "SNOWFLAKE_USER": os.getenv("SNOWFLAKE_USER"),
+            "SNOWFLAKE_PASSWORD": os.getenv("SNOWFLAKE_PASSWORD"),
+            "SNOWFLAKE_WAREHOUSE": os.getenv("SNOWFLAKE_WAREHOUSE"),
+            "SNOWFLAKE_DATABASE": os.getenv("SNOWFLAKE_DATABASE", "PACKET"),
+            "SNOWFLAKE_SCHEMA": os.getenv("SNOWFLAKE_SCHEMA", "SILVER"),
+            "SNOWFLAKE_ROLE": os.getenv("SNOWFLAKE_ROLE"),
+            "DBT_PROFILES_DIR": DBT_PROFILES_DIR,
+            "DOCKER_NETWORK_NAME": DOCKER_NETWORK_NAME,
+        },
+        mount_tmp_dir=False,
+        auto_remove=True,
     )
 
     end = EmptyOperator(task_id="end")
 
-    start >> check_kafka_topic_task >> run_streaming_job_task >> wait_for_raw_data >> run_rdd_etl_task >> run_df_etl_task >> validate_output_task >> end
+    start >> check_kafka_topic_task >> run_streaming_job_task >> wait_for_raw_data >> run_rdd_etl_task >> run_dbt_task >> end
